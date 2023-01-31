@@ -2,53 +2,24 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { TestInterceptor } from './interceptor/interceptor.interceptor';
+import { ConfigService } from '@nestjs/config';
+import { documentBuilderConfig } from './config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const PORT = 8888
+  const { server, validationPipes } = app.get<ConfigService>(ConfigService)['internalConfig']['config']
+  const PORT = parseInt(server.port, 10) || 8000
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      validatorPackage: require('class-validator'),
-      whitelist: true,
-      transformerPackage: require('class-transformer'),
-      transform: true,
-      forbidNonWhitelisted: true,
-      forbidUnknownValues: true,
-      transformOptions: {
-        enableImplicitConversion: true
-      }
-    })
-  )
+  app.useGlobalInterceptors(new TestInterceptor())
+  app.useGlobalPipes(new ValidationPipe(validationPipes))
+  app.enableCors(server.corsOptions)
 
-
-  app.enableCors({
-    origin: "http://localhost:3000",
-    methods: "GET, POST, PUT, PATCH",
-    allowedHeaders: "Content-Type, Authorization,Access-Control-Allow-Origin, id_channel, session_id",
-    credentials: true
-  })
-
-  const config = new DocumentBuilder()
-    .setTitle('Accenture - Galicia ABM')
-    .setDescription('API de ABM')
-    .setVersion('1.0')
-    .setExternalDoc("Documentacion externa", "")
-    .addBearerAuth({
-      type: 'http',
-      scheme: 'bearer',
-      bearerFormat: 'JWT',
-      name: 'authorization',
-      description: 'Enter JWT token',
-      in: 'header'
-    },'access-token')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config)
-
-
+  const document = SwaggerModule.createDocument(app, documentBuilderConfig)
   SwaggerModule.setup('docs', app, document)
 
-  await app.listen(PORT);
+  await app.listen(PORT, () => {
+    console.log(`App running on: http://localhost:${PORT}`)
+  });
 }
 bootstrap();
